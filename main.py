@@ -14,6 +14,9 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
 
+os.getenv("DISCORD_TOKEN")
+
+
 @bot.event
 async def on_ready():
     await tree.sync()
