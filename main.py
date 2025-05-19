@@ -3,6 +3,9 @@ from discord import app_commands
 from discord.ext import commands
 import time
 import aiohttp
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
+import torch
+import json
 import io
 import re
 import os
