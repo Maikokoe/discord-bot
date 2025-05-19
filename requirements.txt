@@ -2,3 +2,4 @@ discord.py==2.3.2
 aiohttp
 python-dotenv
 json5
+googletrans==4.0.0rc1
