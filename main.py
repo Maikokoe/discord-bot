@@ -26,7 +26,6 @@ async def on_ready():
 
 
 MEMORY_FILE = "memory.json"
-translator = Translator()
 
 def load_memory():
     if not os.path.exists(MEMORY_FILE):
@@ -70,14 +69,7 @@ async def on_message(message):
     content = message.content.lower()
 
     # Translate non-English messages
-    try:
-        detected = translator.detect(content)
-        if detected.lang != 'en':
-            translated = translator.translate(content, dest='en')
-            await message.reply(f"🌍 Translated from {detected.lang}: {translated.text}", mention_author=True)
-            return
-    except:
-        pass  # Ignore translation errors
+
 
     # Respond to replies directed at Koe
     if message.reference:
