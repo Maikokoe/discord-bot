@@ -7,7 +7,6 @@ import json
 import io
 import re
 import os
-from googletrans import Translator
 
 
 intents = discord.Intents.default()
