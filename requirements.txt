@@ -1,6 +1,4 @@
 discord.py==2.3.2
 aiohttp
 python-dotenv
-openai
-transformers
 json5
