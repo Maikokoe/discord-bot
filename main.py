@@ -25,7 +25,68 @@ async def on_ready():
 
 
 
+MEMORY_FILE = "memory.json"
+if not os.path.exists(MEMORY_FILE):
+    with open(MEMORY_FILE, "w") as f:
+        json.dump([], f)
 
+def load_memory():
+    with open(MEMORY_FILE, "r") as f:
+        return json.load(f)
+
+def save_to_memory(text):
+    memory = load_memory()
+    memory.append(text)
+    with open(MEMORY_FILE, "w") as f:
+        json.dump(memory, f)
+
+async def smart_search(query):
+    url = f"https://api.duckduckgo.com/?q={query}&format=json&no_redirect=1&no_html=1"
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                answer = data.get("AbstractText")
+                if answer:
+                    return answer
+    return None
+
+@tree.command(name="teach", description="Teach Koe something new")
+@app_commands.describe(message="The message to teach Koe")
+async def teach(interaction: discord.Interaction, message: str):
+    save_to_memory(message)
+    await interaction.response.send_message("Got it! I’ve learned something new.", ephemeral=True)
+
+@bot.event
+async def on_ready():
+    await tree.sync()
+    print(f"Koe is online as {bot.user}")
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    content = message.content.lower()
+
+    # 🤖 Try smart search for questions
+    if any(x in content for x in ["why", "how", "what", "who", "where", "when"]) and not content.startswith("/"):
+        response = await smart_search(content)
+        if response:
+            await message.reply(response, mention_author=True)
+            return
+        else:
+            await message.reply("I'm not sure yet... wanna teach me?", mention_author=True)
+            return
+
+    # 💬 Try responding with memory if similar
+    memory = load_memory()
+    matches = [m for m in memory if content in m or m in content]
+    if matches and random.random() < 0.3:
+        await message.reply(random.choice(matches), mention_author=True)
+        return
+
+    await bot.process_commands(message)
 
 
 
