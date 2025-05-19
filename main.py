@@ -25,6 +25,118 @@ async def on_ready():
     await tree.sync()
     print(f"Logged in as {bot.user}")
 
+
+
+
+# Load GPT-2 tokenizer and model
+tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+model_path = "./gpt2-trained"
+model = GPT2LMHeadModel.from_pretrained(model_path if os.path.exists(model_path) else "gpt2")
+
+# Load memory
+if os.path.exists("memory.json"):
+    with open("memory.json", "r") as f:
+        memory = json.load(f)
+else:
+    memory = {}
+
+def save_memory():
+    with open("memory.json", "w") as f:
+        json.dump(memory, f, indent=2)
+
+def generate_response(user_id, new_input):
+    if user_id not in memory:
+        memory[user_id] = []
+
+    memory[user_id].append(new_input)
+    memory[user_id] = memory[user_id][-10:]
+
+    prompt = "\n".join(memory[user_id]) + "\nBot:"
+    input_ids = tokenizer.encode(prompt, return_tensors='pt')
+
+    output = model.generate(
+        input_ids,
+        max_length=150,
+        pad_token_id=tokenizer.eos_token_id,
+        temperature=0.9,
+        top_k=50,
+        top_p=0.95,
+        do_sample=True,
+    )
+
+    response = tokenizer.decode(output[0], skip_special_tokens=True)
+    bot_response = response[len(prompt):].strip()
+    memory[user_id].append("Bot: " + bot_response)
+
+    # Save to training data
+    with open("training_data.txt", "a", encoding="utf-8") as f:
+        f.write(f"User: {new_input}\nBot: {bot_response}\n\n")
+
+    save_memory()
+    return bot_response
+
+def train_on_logs():
+    if not os.path.exists("training_data.txt"):
+        return "❌ No training data yet."
+
+    dataset = TextDataset(
+        tokenizer=tokenizer,
+        file_path="training_data.txt",
+        block_size=128,
+    )
+    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+
+    training_args = TrainingArguments(
+        output_dir="./gpt2-trained",
+        overwrite_output_dir=True,
+        num_train_epochs=1,
+        per_device_train_batch_size=1,
+        save_steps=500,
+        save_total_limit=1,
+        logging_dir="./logs",
+        logging_steps=100,
+    )
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        data_collator=data_collator,
+        train_dataset=dataset,
+    )
+
+    trainer.train()
+    trainer.save_model("./gpt2-trained")
+    return "✅ Training complete. Model updated!"
+
+@bot.event
+async def on_ready():
+    print(f"✅ Logged in as {bot.user}")
+    try:
+        synced = await tree.sync()
+        print(f"🌐 Synced {len(synced)} slash command(s).")
+    except Exception as e:
+        print(f"⚠️ Sync error: {e}")
+
+@tree.command(name="speak", description="Talk to the bot and help it learn.")
+async def speak(interaction: discord.Interaction, message: str):
+    await interaction.response.defer()
+    user_id = str(interaction.user.id)
+    response = generate_response(user_id, "User: " + message)
+    await interaction.followup.send(response or "🤖 Hmm... I didn’t catch that.")
+
+@tree.command(name="train", description="Train the bot on your conversation history.")
+async def train(interaction: discord.Interaction):
+    await interaction.response.defer(thinking=True)
+    msg = train_on_logs()
+    await interaction.followup.send(msg)
+
+
+
+
+
+
+
+
 # /emoji command
 @tree.command(name="emoji", description="Get a custom emoji by ID")
 async def get_emoji(interaction: discord.Interaction, emoji_id: str):
