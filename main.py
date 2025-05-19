@@ -5,6 +5,7 @@ import time
 import aiohttp
 import io
 import re
+import os
 
 from dotenv import load_dotenv
 load_dotenv()
