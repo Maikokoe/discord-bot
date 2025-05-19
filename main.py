@@ -7,7 +7,7 @@ import json
 import io
 import re
 import os
-import ascyncio
+import asyncio
 
 
 intents = discord.Intents.default()
