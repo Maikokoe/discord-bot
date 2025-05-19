@@ -7,6 +7,7 @@ import json
 import io
 import re
 import os
+from googletrans import Translator
 
 
 intents = discord.Intents.default()
@@ -26,17 +27,15 @@ async def on_ready():
 
 
 MEMORY_FILE = "memory.json"
-if not os.path.exists(MEMORY_FILE):
-    with open(MEMORY_FILE, "w") as f:
-        json.dump([], f)
+translator = Translator()
 
 def load_memory():
+    if not os.path.exists(MEMORY_FILE):
+        return []
     with open(MEMORY_FILE, "r") as f:
         return json.load(f)
 
-def save_to_memory(text):
-    memory = load_memory()
-    memory.append(text)
+def save_memory(memory):
     with open(MEMORY_FILE, "w") as f:
         json.dump(memory, f)
 
@@ -51,16 +50,18 @@ async def smart_search(query):
                     return answer
     return None
 
-@tree.command(name="teach", description="Teach Koe something new")
-@app_commands.describe(message="The message to teach Koe")
-async def teach(interaction: discord.Interaction, message: str):
-    save_to_memory(message)
-    await interaction.response.send_message("Got it! I’ve learned something new.", ephemeral=True)
-
 @bot.event
 async def on_ready():
+    print(f"Logged in as {bot.user}")
     await tree.sync()
-    print(f"Koe is online as {bot.user}")
+
+@tree.command(name="teach", description="Teach Koe how to respond to a question")
+@app_commands.describe(question="What someone might ask", answer="What Koe should say")
+async def teach(interaction: discord.Interaction, question: str, answer: str):
+    memory = load_memory()
+    memory.append({"q": question.lower(), "a": answer})
+    save_memory(memory)
+    await interaction.response.send_message("Got it! I've learned something new 🧠", ephemeral=True)
 
 @bot.event
 async def on_message(message):
@@ -69,22 +70,50 @@ async def on_message(message):
 
     content = message.content.lower()
 
-    # 🤖 Try smart search for questions
-    if any(x in content for x in ["why", "how", "what", "who", "where", "when"]) and not content.startswith("/"):
-        response = await smart_search(content)
+    # Translate non-English messages
+    try:
+        detected = translator.detect(content)
+        if detected.lang != 'en':
+            translated = translator.translate(content, dest='en')
+            await message.reply(f"🌍 Translated from {detected.lang}: {translated.text}", mention_author=True)
+            return
+    except:
+        pass  # Ignore translation errors
+
+    # Respond to replies directed at Koe
+    if message.reference:
+        ref = await message.channel.fetch_message(message.reference.message_id)
+        if ref.author.id == bot.user.id:
+            response = await smart_search(message.content)
+            if response:
+                await message.reply(response, mention_author=True)
+                return
+            else:
+                memory = load_memory()
+                for pair in memory:
+                    if pair["q"] in content:
+                        await message.reply(pair["a"], mention_author=True)
+                        return
+                await message.reply("Hmm... I'm still learning that. Try teaching me with `/teach`!", mention_author=True)
+                return
+
+    # Respond if "koe" is mentioned anywhere in message
+    if "koe" in content:
+        parts = content.split("koe", 1)
+        prompt = parts[1].strip(" ,?!") if len(parts) > 1 else ""
+
+        response = await smart_search(prompt)
         if response:
             await message.reply(response, mention_author=True)
             return
         else:
-            await message.reply("I'm not sure yet... wanna teach me?", mention_author=True)
+            memory = load_memory()
+            for pair in memory:
+                if pair["q"] in prompt:
+                    await message.reply(pair["a"], mention_author=True)
+                    return
+            await message.reply("Hmm... I'm still learning that. Try teaching me with `/teach`!", mention_author=True)
             return
-
-    # 💬 Try responding with memory if similar
-    memory = load_memory()
-    matches = [m for m in memory if content in m or m in content]
-    if matches and random.random() < 0.3:
-        await message.reply(random.choice(matches), mention_author=True)
-        return
 
     await bot.process_commands(message)
 
