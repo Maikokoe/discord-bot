@@ -9,7 +9,7 @@ import os
 
 
 intents = discord.Intents.default()
-intents.guilds = True
+intents = discord.Intents.all()  # ✅ Enables ALL intents
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
