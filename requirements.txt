@@ -3,5 +3,4 @@ aiohttp
 python-dotenv
 openai
 transformers
-torch
 json5
