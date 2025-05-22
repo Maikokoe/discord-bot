@@ -1,9 +1,26 @@
-import discord
 import os
+import discord
 from discord.ext import commands
 from datetime import datetime, timedelta
 
 bot = commands.Bot(intents=discord.Intents.all())
+
+class ConfirmPurgeView(discord.ui.View):
+    def __init__(self, ctx, messages):
+        super().__init__(timeout=20)
+        self.ctx = ctx
+        self.messages = messages
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.danger)
+    async def confirm_callback(self, button: discord.ui.Button, interaction: discord.Interaction):
+        await self.ctx.channel.delete_messages(self.messages)
+        await interaction.response.edit_message(content=f"✅ Deleted {len(self.messages)} message(s).", embed=None, view=None)
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel_callback(self, button: discord.ui.Button, interaction: discord.Interaction):
+        await interaction.response.edit_message(content="❌ Purge cancelled.", embed=None, view=None)
+        self.stop()
 
 @bot.slash_command(name="purge", description="Delete messages with advanced filters")
 @discord.option("amount", int, description="Number of messages to check (max 100)")
@@ -56,17 +73,7 @@ async def purge(
     if max_age_minutes:
         embed.add_field(name="Max Age", value=f"{max_age_minutes} min", inline=True)
 
-    view = discord.ui.View(timeout=20)
-
-    @view.button(label="Confirm", style=discord.ButtonStyle.danger)
-    async def confirm_callback(interaction: discord.Interaction, button: discord.ui.Button):
-        await ctx.channel.delete_messages(messages)
-        await interaction.response.edit_message(content=f"✅ Deleted {len(messages)} message(s).", embed=None, view=None)
-
-    @view.button(label="Cancel", style=discord.ButtonStyle.secondary)
-    async def cancel_callback(interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(content="❌ Purge cancelled.", embed=None, view=None)
-
+    view = ConfirmPurgeView(ctx, messages)
     await ctx.respond(embed=embed, view=view, ephemeral=True)
 
 bot.run(os.getenv("DISCORD_TOKEN"))
