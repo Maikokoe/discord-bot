@@ -9,23 +9,27 @@ load_dotenv()
 intents = discord.Intents.all()
 bot = commands.Bot(intents=intents)
 
-class ConfirmPurge(discord.ui.View):
+class ConfirmPurgeView(discord.ui.View):
     def __init__(self, ctx, messages):
         super().__init__(timeout=20)
         self.ctx = ctx
         self.messages = messages
 
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.danger)
-    async def confirm(self, interaction, button):
+    async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user != self.ctx.author:
-            await interaction.response.send_message("You can't confirm this purge.", ephemeral=True)
+            await interaction.response.send_message("You didn't initiate this purge.", ephemeral=True)
             return
         await self.ctx.channel.delete_messages(self.messages)
-        await interaction.response.edit_message(content=f"✅ Deleted {len(self.messages)} message(s).", embed=None, view=None)
+        await interaction.response.edit_message(
+            content=f"✅ Deleted {len(self.messages)} message(s).",
+            embed=None,
+            view=None
+        )
         self.stop()
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
-    async def cancel(self, interaction, button):
+    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(content="❌ Purge cancelled.", embed=None, view=None)
         self.stop()
 
@@ -41,7 +45,7 @@ async def purge(ctx, amount, user=None, keyword=None, botsOnly=False, maxAge=Non
 
     await ctx.defer(ephemeral=True)
 
-    def isMatch(msg):
+    def matches(msg):
         if user and msg.author.id != user.id:
             return False
         if keyword and keyword.lower() not in msg.content.lower():
@@ -49,20 +53,20 @@ async def purge(ctx, amount, user=None, keyword=None, botsOnly=False, maxAge=Non
         if botsOnly and not msg.author.bot:
             return False
         if maxAge:
-            cutoff = datetime.utcnow() - timedelta(minutes=maxAge)
-            if msg.created_at < cutoff:
+            limit_time = datetime.utcnow() - timedelta(minutes=maxAge)
+            if msg.created_at < limit_time:
                 return False
         return True
 
     history = [msg async for msg in ctx.channel.history(limit=amount)]
-    targets = [msg for msg in history if isMatch(msg)]
+    to_delete = [msg for msg in history if matches(msg)]
 
-    if not targets:
+    if not to_delete:
         return await ctx.respond("No matching messages found.", ephemeral=True)
 
     embed = discord.Embed(
         title="Confirm Purge",
-        description=f"Found **{len(targets)}** message(s). Delete them?",
+        description=f"Found **{len(to_delete)}** message(s). Confirm to delete.",
         color=discord.Color.red()
     )
     if user:
@@ -74,7 +78,7 @@ async def purge(ctx, amount, user=None, keyword=None, botsOnly=False, maxAge=Non
     if maxAge:
         embed.add_field(name="Max Age", value=f"{maxAge} min", inline=True)
 
-    view = ConfirmPurge(ctx, targets)
+    view = ConfirmPurgeView(ctx, to_delete)
     await ctx.respond(embed=embed, view=view, ephemeral=True)
 
 bot.run(os.getenv("DISCORD_TOKEN"))
