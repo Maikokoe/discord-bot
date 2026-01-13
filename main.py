@@ -19,6 +19,7 @@ except ImportError:
         print("Warning: app_commands not found in discord. Application commands may not work.")
 import json
 import asyncio
+import google.generativeai as genai
 from datetime import datetime
 from collections import Counter
 import re
