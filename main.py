@@ -81,34 +81,27 @@ bot.reaction_snipes = {}
 recently_responded = set()
 
 async def generate_response(user_id, guild_id, user_name, content, image_urls=None):
-    """Generates response using Gemini Free Tier"""
     try:
         global memory
         convo_key = f"{guild_id}_{user_id}"
         
-        # Build message history for Gemini
+        # 1. Get memory
         recent_convos = memory.get("convos", {}).get(convo_key, [])[-5:]
         history = "\n".join([f"{c['who']}: {c['text']}" for c in recent_convos])
         
-        prompt_parts = [f"{SYSTEM_PROMPT}\n\nHistory:\n{history}\n\n{user_name}: {content}"]
+        # 2. Setup the prompt
+        prompt = f"{SYSTEM_PROMPT}\n\nHistory:\n{history}\n\n{user_name}: {content}"
 
-        # Handle images (Gemini can see images natively!)
-        if image_urls:
-            for url in image_urls:
-                resp = requests.get(url)
-                img = Image.open(BytesIO(resp.content))
-                prompt_parts.append(img)
-
-        # Call Gemini (Free)
-        # We run this in a thread to keep the bot responsive
+        # 3. Call Gemini (Fixing the 'positional argument' error here)
         response = await asyncio.to_thread(
-            client.models.generate_content, 
-            prompt_parts
+            client.models.generate_content,
+            model="gemini-1.5-flash", # Named argument 1
+            contents=prompt           # Named argument 2
         )
         
         reply = response.text.strip().lower()
 
-        # Update Memory
+        # 4. Save to Memory
         if settings.get("remember_users", True):
             if convo_key not in memory["convos"]: memory["convos"][convo_key] = []
             memory["convos"][convo_key].append({"who": user_name, "text": content})
