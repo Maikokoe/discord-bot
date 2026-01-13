@@ -45,7 +45,7 @@ if not DISCORD_TOKEN or not GEMINI_API_KEY:
     exit()
 
 # Configure Gemini
-genai.configure(api_key=GEMINI_API_KEY)
+client = genai.Client(api_key=GEMINI_API_KEY)
 # Using 'gemini-1.5-flash' because it is the fastest and free
 model = genai.GenerativeModel('gemini-1.5-flash')
 
