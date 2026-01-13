@@ -8,7 +8,15 @@ sys.modules['audioop'] = MagicMock()
 import os
 import discord
 from discord.ext import commands
-from discord import app_commands
+try:
+    from discord import app_commands
+except ImportError:
+    # Fallback for environments where discord.py versioning or installation is inconsistent
+    try:
+        import discord.app_commands as app_commands
+    except ImportError:
+        app_commands = None
+        print("Warning: app_commands not found in discord. Application commands may not work.")
 import json
 import asyncio
 from datetime import datetime
