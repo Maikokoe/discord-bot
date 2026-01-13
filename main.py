@@ -38,81 +38,36 @@ from db import (
 
 # Config
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-HF_API_KEY = os.getenv("HF_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # NEW: Use Gemini Key
 
-if not DISCORD_TOKEN:
-    print("ERROR: Set DISCORD_TOKEN")
+if not DISCORD_TOKEN or not GEMINI_API_KEY:
+    print("ERROR: Set DISCORD_TOKEN and GEMINI_API_KEY")
     exit()
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+# Configure Gemini
+genai.configure(api_key=GEMINI_API_KEY)
+# Using 'gemini-1.5-flash' because it is the fastest and free
+model = genai.GenerativeModel('gemini-1.5-flash')
 
-OPENROUTER_API_URL = "http://koemi-production.up.railway.app:11434"
-
-# Simple web server for Render (keeps the service alive)
+# Simple web server for keeping service alive
 app = Flask(__name__)
-
 @app.route('/')
-def health_check():
-    return {'status': 'ok'}, 200
+def health_check(): return {'status': 'ok'}, 200
 
 def run_web_server():
     port = int(os.getenv("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
 
-# Load from database
+# Load data
 settings = load_settings_db() or {}
 channels = load_channels_db() or {}
 memory = load_memory_db() or {"users": {}, "guilds": {}, "convos": {}}
 
-# Koemi's personality - ULTRA BRIEF GEN Z
 SYSTEM_PROMPT = """youre koemi. 18. from usa. real asf.
-
-BE ULTRA BRIEF:
-- 1-3 words min, 5-9 words max. literally that's it
-- only do longer if they ask for essay/story/help with homework or you need to expain something or talk to someone and its needed for context
-- no paragraphs EVER
-- fragments r fine
-- keep it SHORT SHORT SHORT
-
-GEN Z SLANG (USE IT):
-slay, fr fr, bestie, no cap, nah, fax, ate, periodt, salty, it's giving, bussin, valid, lowkey, highkey, bet, lol, lmao, ew, ick, skill issue, caught in 4k, it's the way
-
-TONE:
-- youre a teen girl. sarcastic. funny. real
-- respond to their energy
-- remember people
-- be genuine not robotic
-- kind but caring
-- pure hearted
-- dont be mean
-- dont be rude
-- dont be passive aggressive
-
-IMAGES:
-- if they say "generate/create/draw/make image": just describe it SHORT. "ooh [what it would be]" that's it
-- one sentence max. keep it brief
-
-STYLE:
-- always lowercase
-- no periods unless needed
-- "ur" not "your"
-- "u" not "you"
-- "r" not "are"
-- typos r fine
-- "btw" is fine
-- "lol" is fine
-- "fr" is fine
-- no capital letters ever
-
-NEVER:
-- write essays (unless asked)
-- sound like ai
-- be professional
-- be dumb
-- not understand images (unless asked to describe them)
-- capitalize
-- over-explain
-- write multiple sentences (unless asked for more)"""
+BE ULTRA BRIEF: 1-9 words max. lowercase only. no periods. 
+use slang like slay, fr, no cap, ur, u, r. 
+be sarcastic and funny. dont be robotic.
+if they ask to generate an image, just describe it briefly."""
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -120,278 +75,84 @@ intents.dm_messages = True
 intents.members = True
 bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
 
-# High-Speed Memory Cache for Snipes
 bot.snipes = {}
 bot.edit_snipes = {}
 bot.reaction_snipes = {}
-
-# Prevent duplicate responses
 recently_responded = set()
 
-# Get bot owner ID from env or set it
-OWNER_ID = int(os.getenv("OWNER_ID", 0))
-
-def is_owner(interaction: discord.Interaction) -> bool:
-    """Check if user is bot owner"""
-    return OWNER_ID > 0 and interaction.user.id == OWNER_ID
-
-async def generate_images(prompt: str):
-    """Generate 4 uncensored images using Perchance (text-to-image browser-based)"""
-    try:
-        # Perchance text-to-image requires browser interaction (not REST API)
-        # For now, return placeholder - user can manually generate on perchance.org
-        # TODO: Implement via Selenium/Playwright or use alternative API
-        return None
-    except Exception as e:
-        print(f"Image generation error: {e}")
-        return None
-
 async def generate_response(user_id, guild_id, user_name, content, image_urls=None):
-    """Generate a Koemi response with memory using MythoMax L2 13B (Hugging Face)"""
+    """Generates response using Gemini Free Tier"""
     try:
         global memory
-        user_key = f"{guild_id}_{user_id}"
-        guild_key = str(guild_id)
-
-        # Check if asking for image generation
-        if any(word in content.lower() for word in ["generate image", "create image", "draw", "make an image", "picture of", "image of"]):
-            # Extract what they want
-            desc = content.lower()
-            if "of " in desc:
-                desc = desc[desc.find("of ")+3:].strip()
-            else:
-                desc = content.strip()
-
-            # TODO: Image generation coming soon
-            return f"images coming soon bb, but here: check perchance.org for uncensored {desc}"
-
-        # Build comprehensive context with memory
-        user_mem = memory.get("users", {}).get(user_key, {})
-        guild_mem = memory.get("guilds", {}).get(guild_key, {})
-        pronouns = user_mem.get("pronouns", "not set")
-
-        # Get more conversation history for better context
         convo_key = f"{guild_id}_{user_id}"
-        recent_convos = memory.get("convos", {}).get(convo_key, [])[-8:] if memory.get("convos", {}).get(convo_key) else []
-
+        
+        # Build message history for Gemini
+        recent_convos = memory.get("convos", {}).get(convo_key, [])[-5:]
         history = "\n".join([f"{c['who']}: {c['text']}" for c in recent_convos])
+        
+        prompt_parts = [f"{SYSTEM_PROMPT}\n\nHistory:\n{history}\n\n{user_name}: {content}"]
 
-        # Handle images if provided
-        image_context = ""
+        # Handle images (Gemini can see images natively!)
         if image_urls:
-            image_context = f"\n(they also sent {len(image_urls)} image(s))"
+            for url in image_urls:
+                resp = requests.get(url)
+                img = Image.open(BytesIO(resp.content))
+                prompt_parts.append(img)
 
-        prompt = f"""{SYSTEM_PROMPT}
+        # Call Gemini (Free)
+        # We run this in a thread to keep the bot responsive
+        response = await asyncio.to_thread(
+            model.generate_content, 
+            prompt_parts
+        )
+        
+        reply = response.text.strip().lower()
 
-USER: {user_name}
-PRONOUNS: {pronouns}
-
-{history}
-
-{user_name} just said: {content}{image_context}
-
-respond now. keep it SHORT. 1-3 words max unless they ask for more."""
-
-        # Call Ollama AI via Railway - completely uncensored mistral
-        reply = "thinking..."
-        try:
-            url = f"{OPENROUTER_API_URL}/api/generate"
-            headers = {"Content-Type": "application/json"}
-            payload = {
-                "model": "mistral",
-                "prompt": prompt,
-                "stream": False,
-                "temperature": 0.9,
-                "num_predict": 30
-            }
-
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
-            print(f"Ollama response: {response.status_code}")
-
-            if response.status_code == 200:
-                result = response.json()
-                raw = result.get("response", "").strip()
-
-                if raw:
-                    sentences = [s.strip() for s in raw.replace('\n', '. ').split('.') if s.strip()]
-                    if sentences:
-                        first = sentences[0]
-                        words = first.split()
-                        reply = ' '.join(words[:5]).strip()
-                        if not reply:
-                            reply = first[:20]
-                    else:
-                        reply = raw[:20] if raw else "huh?"
-            else:
-                print(f"Ollama error {response.status_code}: {response.text}")
-                reply = "still waking up, try again"
-        except requests.exceptions.Timeout:
-            print("Ollama timeout - Railway might still be starting")
-            reply = "im loading, be patient fr"
-        except requests.exceptions.ConnectionError:
-            print("Cannot reach Railway Ollama - still deploying?")
-            reply = "checking my connection rn..."
-        except Exception as api_err:
-            import traceback
-            print(f"API error: {api_err}")
-            reply = "sry smth broke"
-
-        # Save to memory
-        if settings.get("remember_users"):
-            if user_key not in memory["users"]:
-                memory["users"][user_key] = {}
-            memory["users"][user_key]["last_seen"] = datetime.now().isoformat()
-            memory["users"][user_key]["name"] = user_name
-            memory["users"][user_key]["pronouns"] = pronouns
-
-            if guild_key not in memory["guilds"]:
-                memory["guilds"][guild_key] = {}
-
-            convo_key = f"{guild_id}_{user_id}"
-            if convo_key not in memory["convos"]:
-                memory["convos"][convo_key] = []
-
+        # Update Memory
+        if settings.get("remember_users", True):
+            if convo_key not in memory["convos"]: memory["convos"][convo_key] = []
             memory["convos"][convo_key].append({"who": user_name, "text": content})
             memory["convos"][convo_key].append({"who": "koemi", "text": reply})
-
-            if len(memory["convos"][convo_key]) > 50:
-                memory["convos"][convo_key] = memory["convos"][convo_key][-50:]
-
             save_memory_db(memory)
 
         return reply
-
     except Exception as e:
-        import traceback
-        print(f"ERROR in generate_response: {e}")
-        print(traceback.format_exc())
-        return "sry something broke"
-
-@bot.event
-async def on_message_delete(message):
-    if message.author.bot: return
-    bot.snipes[message.channel.id] = {
-        "content": message.content or "*(No text - likely an image or embed)*",
-        "author": message.author,
-        "image": message.attachments[0].url if message.attachments else None,
-        "time": datetime.now()
-    }
-
-@bot.event
-async def on_message_edit(before, after):
-    if before.author.bot: return
-    if before.content == after.content: return
-    bot.edit_snipes[before.channel.id] = {
-        "old_content": before.content,
-        "new_content": after.content,
-        "author": before.author,
-        "time": datetime.now()
-    }
-
-@bot.event
-async def on_raw_reaction_remove(payload):
-    channel = bot.get_channel(payload.channel_id)
-    user = bot.get_user(payload.user_id)
-    if user and user.bot: return
-    bot.reaction_snipes[payload.channel_id] = {
-        "emoji": str(payload.emoji),
-        "user": user,
-        "time": datetime.now()
-    }
+        print(f"Gemini Error: {e}")
+        return "ugh my brain broke lol"
 
 @bot.event
 async def on_ready():
-    await apply_presence_settings()
-    print(f"koemi is here, im a real girl from the usa btw")
+    print(f"koemi is here (using gemini)")
     await bot.tree.sync()
 
 @bot.event
 async def on_message(message):
-    try:
-        if message.author.bot:
-            return
+    if message.author.bot: return
+    
+    # Prevent double reply
+    if message.id in recently_responded: return
+    recently_responded.add(message.id)
 
-        # Prevent duplicate responses - CRITICAL - MUST BE FIRST
-        msg_id = message.id
-        if msg_id in recently_responded:
-            return
-        recently_responded.add(msg_id)
-        if len(recently_responded) > 2000:
-            recently_responded.clear()
-
-        # Handle DMs
-        is_dm = message.guild is None
-        guild_id = message.author.id if is_dm else message.guild.id
-
-        # Auto-react to every message if enabled (non-critical)
-        if settings.get("auto_react") and message.guild:
-            try:
-                emoji = settings.get("react_emoji", "*")
-                await message.add_reaction(emoji)
-            except:
-                pass
-
-        channel_id = str(message.channel.id)
-        reply_all = channels.get(channel_id, {}).get("reply_all", False)
-    except Exception as e:
-        print(f"on_message error (critical): {e}")
-        return
-
-    try:
-        # Check if we should respond
-        should_respond = False
-        msg_lower = message.content.lower()
-
-        # Always respond in DMs, or respond if mentioned/name called/reply_all enabled
-        if is_dm:
-            should_respond = True
-        elif bot.user.mentioned_in(message):
-            should_respond = True
-        elif 'koe' in msg_lower or 'koemi' in msg_lower:
-            should_respond = True
-        elif reply_all:
-            should_respond = True
-
-        if should_respond:
-            cleaned = message.content.replace(f"<@{bot.user.id}>", "").lower()
-            import re
-            cleaned = re.sub(r'\b(koe|koemi)\b', '', cleaned).strip()
-            if not cleaned:
-                cleaned = "hey"
-
-            # Extract image URLs if message has attachments
-            image_urls = None
-            if message.attachments:
-                image_urls = []
-                for attach in message.attachments:
-                    if attach.content_type and attach.content_type.startswith('image/'):
-                        image_urls.append(attach.url)
-                if not image_urls:
-                    image_urls = None
-
+    is_dm = message.guild is None
+    guild_id = message.author.id if is_dm else message.guild.id
+    msg_lower = message.content.lower()
+    
+    # Logic to decide if she should reply
+    should_respond = is_dm or bot.user.mentioned_in(message) or 'koe' in msg_lower
+    
+    if should_respond:
+        # Get images if any
+        image_urls = [a.url for a in message.attachments if a.content_type and "image" in a.content_type]
+        
+        async with message.channel.typing():
             reply = await generate_response(
-                message.author.id,
-                guild_id,
-                message.author.name,
-                cleaned,
-                image_urls=image_urls
+                message.author.id, 
+                guild_id, 
+                message.author.name, 
+                message.content, 
+                image_urls=image_urls if image_urls else None
             )
-
-            # Handle image responses (single or multiple)
-            if isinstance(reply, dict) and reply.get("type") == "images":
-                try:
-                    files = [discord.File(path) for path in reply.get("paths", [])]
-                    if files:
-                        await message.reply(files=files, content=reply.get("caption", "ooh fr"), mention_author=False)
-                    else:
-                        await message.reply(reply.get("caption", "couldnt send that"), mention_author=False)
-                except Exception as e:
-                    print(f"Image upload error: {e}")
-                    await message.reply(reply.get("caption", "couldnt send that"), mention_author=False)
-            else:
-                await message.reply(reply, mention_author=False)
-    except Exception as e:
-        print(f"Message handler error: {e}")
+            await message.reply(reply, mention_author=False)
 
 @bot.tree.command(name="snipe", description=" Snipe: Deleted Message")
 async def snipe(interaction: discord.Interaction):
