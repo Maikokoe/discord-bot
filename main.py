@@ -19,7 +19,8 @@ except ImportError:
         print("Warning: app_commands not found in discord. Application commands may not work.")
 import json
 import asyncio
-from google import genai  # UPDATED: The new official library
+from google import genai
+from google.genai import types  # Add this line at the top
 from datetime import datetime
 from collections import Counter
 import re
@@ -44,9 +45,12 @@ if not DISCORD_TOKEN or not GEMINI_API_KEY:
     print("ERROR: Set DISCORD_TOKEN and GEMINI_API_KEY")
     exit()
 
-# Configure Gemini
-client = genai.Client(api_key=GEMINI_API_KEY)
-# Using 'gemini-1.5-flash' because it is the fastest and free
+
+# Update your client to force version "v1"
+client = genai.Client(
+    api_key=GEMINI_API_KEY,
+    http_options=types.HttpOptions(api_version="v1")
+)
 
 
 # Simple web server for keeping service alive
