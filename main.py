@@ -47,7 +47,7 @@ if not DISCORD_TOKEN or not GEMINI_API_KEY:
 # Configure Gemini
 client = genai.Client(api_key=GEMINI_API_KEY)
 # Using 'gemini-1.5-flash' because it is the fastest and free
-model = genai.GenerativeModel('gemini-1.5-flash')
+
 
 # Simple web server for keeping service alive
 app = Flask(__name__)
