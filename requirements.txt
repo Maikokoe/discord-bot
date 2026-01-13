@@ -7,3 +7,4 @@ requests
 sqlalchemy
 Pillow
 google-generativeai
+google.genai
