@@ -2,3 +2,6 @@ py-cord==2.5.0
 Pillow
 aiohttp
 dotenv
+flask
+flask-cors
+psycopg2-binary
