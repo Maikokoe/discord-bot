@@ -151,7 +151,7 @@ async def generate_response(user_id, guild_id, user_name, content, image_urls=No
         global memory
         user_key = f"{guild_id}_{user_id}"
         guild_key = str(guild_id)
-        
+
         # Check if asking for image generation
         if any(word in content.lower() for word in ["generate image", "create image", "draw", "make an image", "picture of", "image of"]):
             # Extract what they want
@@ -160,26 +160,26 @@ async def generate_response(user_id, guild_id, user_name, content, image_urls=No
                 desc = desc[desc.find("of ")+3:].strip()
             else:
                 desc = content.strip()
-            
+
             # TODO: Image generation coming soon
             return f"images coming soon bb, but here: check perchance.org for uncensored {desc}"
-        
+
         # Build comprehensive context with memory
         user_mem = memory.get("users", {}).get(user_key, {})
         guild_mem = memory.get("guilds", {}).get(guild_key, {})
         pronouns = user_mem.get("pronouns", "not set")
-        
+
         # Get more conversation history for better context
         convo_key = f"{guild_id}_{user_id}"
         recent_convos = memory.get("convos", {}).get(convo_key, [])[-8:] if memory.get("convos", {}).get(convo_key) else []
-        
+
         history = "\n".join([f"{c['who']}: {c['text']}" for c in recent_convos])
-        
+
         # Handle images if provided
         image_context = ""
         if image_urls:
             image_context = f"\n(they also sent {len(image_urls)} image(s))"
-        
+
         prompt = f"""{SYSTEM_PROMPT}
 
 USER: {user_name}
@@ -203,14 +203,14 @@ respond now. keep it SHORT. 1-3 words max unless they ask for more."""
                 "temperature": 0.9,
                 "num_predict": 30
             }
-            
+
             response = requests.post(url, headers=headers, json=payload, timeout=30)
             print(f"Ollama response: {response.status_code}")
-            
+
             if response.status_code == 200:
                 result = response.json()
                 raw = result.get("response", "").strip()
-                
+
                 if raw:
                     sentences = [s.strip() for s in raw.replace('\n', '. ').split('.') if s.strip()]
                     if sentences:
@@ -234,7 +234,7 @@ respond now. keep it SHORT. 1-3 words max unless they ask for more."""
             import traceback
             print(f"API error: {api_err}")
             reply = "sry smth broke"
-        
+
         # Save to memory
         if settings.get("remember_users"):
             if user_key not in memory["users"]:
@@ -242,24 +242,24 @@ respond now. keep it SHORT. 1-3 words max unless they ask for more."""
             memory["users"][user_key]["last_seen"] = datetime.now().isoformat()
             memory["users"][user_key]["name"] = user_name
             memory["users"][user_key]["pronouns"] = pronouns
-            
+
             if guild_key not in memory["guilds"]:
                 memory["guilds"][guild_key] = {}
-            
+
             convo_key = f"{guild_id}_{user_id}"
             if convo_key not in memory["convos"]:
                 memory["convos"][convo_key] = []
-            
+
             memory["convos"][convo_key].append({"who": user_name, "text": content})
             memory["convos"][convo_key].append({"who": "koemi", "text": reply})
-            
+
             if len(memory["convos"][convo_key]) > 50:
                 memory["convos"][convo_key] = memory["convos"][convo_key][-50:]
-            
+
             save_memory_db(memory)
-        
+
         return reply
-        
+
     except Exception as e:
         import traceback
         print(f"ERROR in generate_response: {e}")
@@ -309,7 +309,7 @@ async def on_message(message):
     try:
         if message.author.bot:
             return
-        
+
         # Prevent duplicate responses - CRITICAL - MUST BE FIRST
         msg_id = message.id
         if msg_id in recently_responded:
@@ -317,11 +317,11 @@ async def on_message(message):
         recently_responded.add(msg_id)
         if len(recently_responded) > 2000:
             recently_responded.clear()
-        
+
         # Handle DMs
         is_dm = message.guild is None
         guild_id = message.author.id if is_dm else message.guild.id
-        
+
         # Auto-react to every message if enabled (non-critical)
         if settings.get("auto_react") and message.guild:
             try:
@@ -329,18 +329,18 @@ async def on_message(message):
                 await message.add_reaction(emoji)
             except:
                 pass
-        
+
         channel_id = str(message.channel.id)
         reply_all = channels.get(channel_id, {}).get("reply_all", False)
     except Exception as e:
         print(f"on_message error (critical): {e}")
         return
-    
+
     try:
         # Check if we should respond
         should_respond = False
         msg_lower = message.content.lower()
-        
+
         # Always respond in DMs, or respond if mentioned/name called/reply_all enabled
         if is_dm:
             should_respond = True
@@ -350,14 +350,14 @@ async def on_message(message):
             should_respond = True
         elif reply_all:
             should_respond = True
-        
+
         if should_respond:
             cleaned = message.content.replace(f"<@{bot.user.id}>", "").lower()
             import re
             cleaned = re.sub(r'\b(koe|koemi)\b', '', cleaned).strip()
             if not cleaned:
                 cleaned = "hey"
-            
+
             # Extract image URLs if message has attachments
             image_urls = None
             if message.attachments:
@@ -367,7 +367,7 @@ async def on_message(message):
                         image_urls.append(attach.url)
                 if not image_urls:
                     image_urls = None
-            
+
             reply = await generate_response(
                 message.author.id,
                 guild_id,
@@ -375,7 +375,7 @@ async def on_message(message):
                 cleaned,
                 image_urls=image_urls
             )
-            
+
             # Handle image responses (single or multiple)
             if isinstance(reply, dict) and reply.get("type") == "images":
                 try:
@@ -426,9 +426,9 @@ async def editsnipe(interaction: discord.Interaction):
 async def rsnipe(interaction: discord.Interaction):
     data = bot.reaction_snipes.get(interaction.channel_id)
     if not data:
-        return await interaction.response.send_message("✨ *No reactions have faded yet...*", ephemeral=True)
+        return await interaction.response.send_message(" *No reactions have faded yet...*", ephemeral=True)
     time_string = data["time"].strftime("%I:%M:%S %p")
-    embed = discord.Embed(title="🎭 Reaction Captured", description=f"The reaction {data['emoji']} was removed.", color=0xffcc00)
+    embed = discord.Embed(title=" Reaction Captured", description=f"The reaction {data['emoji']} was removed.", color=0xffcc00)
     if data['user']:
         embed.set_author(name=data['user'].display_name, icon_url=data['user'].display_avatar.url)
     embed.add_field(name=" Captured At", value=f"`{time_string}`", inline=True)
@@ -469,7 +469,7 @@ async def invite_cmd(interaction: discord.Interaction):
     # Generate OAuth2 invite URL with correct scopes and permissions
     client_id = bot.user.id
     invite_url = f"https://discord.com/api/oauth2/authorize?client_id={client_id}&permissions=8&scope=bot%20applications.commands"
-    
+
     embed = discord.Embed(title="invite koemi", color=0xff1493)
     embed.add_field(name="invite link", value=f"[click here to add me to your server or group dm]({invite_url})", inline=False)
     embed.add_field(name="servers", value="add me to any server and ill respond there", inline=False)
@@ -511,10 +511,10 @@ async def reply_all_cmd(interaction: discord.Interaction):
     channel_id = str(interaction.channel.id)
     if channel_id not in channels:
         channels[channel_id] = {}
-    
+
     channels[channel_id]["reply_all"] = not channels.get(channel_id, {}).get("reply_all", False)
     save_channels_db(channels)
-    
+
     status = "on" if channels[channel_id]["reply_all"] else "off"
     await interaction.followup.send(f"reply all {status}")
 
@@ -525,7 +525,7 @@ async def sync_cmd(interaction: discord.Interaction):
     if not interaction.guild or not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message("admin only in a server", ephemeral=True)
         return
-    
+
     await interaction.response.defer()
     try:
         await bot.tree.sync()
@@ -544,16 +544,16 @@ async def apply_presence_settings():
             'dnd': discord.Status.do_not_disturb,
             'invisible': discord.Status.invisible
         }
-        
+
         # Get presence status (online/idle/dnd/invisible)
         presence_status = settings.get('presence_status', 'online')
         status = status_map.get(presence_status, discord.Status.online)
-        
+
         # OPTION 1: CUSTOM STATUS (text next to name, no Playing/Watching prefix)
         # Uncomment this section to use custom status
         presence_text = settings.get('presence_text', '')
         presence_emoji = settings.get('presence_emoji', '')
-        
+
         if presence_text or presence_emoji:
             custom_text = ""
             if presence_emoji:
@@ -564,12 +564,12 @@ async def apply_presence_settings():
             await bot.change_presence(status=status, activity=activity)
             print(f"✓ custom status: {presence_status} | {custom_text}")
             return
-        
+
         # OPTION 2: PLAYING/WATCHING/LISTENING/COMPETING (with prefix)
         # Uncomment this section to use activity instead
         activity_type = settings.get('activity_type', 'watching')
         activity_text = settings.get('status', 'lurking')
-        
+
         if activity_type == "playing":
             activity = discord.Activity(type=discord.ActivityType.playing, name=activity_text)
         elif activity_type == "listening":
@@ -578,7 +578,7 @@ async def apply_presence_settings():
             activity = discord.Activity(type=discord.ActivityType.competing, name=activity_text)
         else:
             activity = discord.Activity(type=discord.ActivityType.watching, name=activity_text)
-        
+
         await bot.change_presence(status=status, activity=activity)
         print(f"✓ activity: {presence_status} | {activity_type} {activity_text}")
     except Exception as e:
