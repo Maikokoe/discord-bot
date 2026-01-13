@@ -376,46 +376,46 @@ async def on_message(message):
     except Exception as e:
         print(f"Message handler error: {e}")
 
-@bot.tree.command(name="snipe", description="⚡ Elite Snapshot: Deleted Message")
+@bot.tree.command(name="snipe", description=" Snipe: Deleted Message")
 async def snipe(interaction: discord.Interaction):
     data = bot.snipes.get(interaction.channel_id)
     if not data:
-        return await interaction.response.send_message("✨ *The shadows are empty...*", ephemeral=True)
+        return await interaction.response.send_message("*The shadows are empty...*", ephemeral=True)
     time_string = data["time"].strftime("%I:%M:%S %p")
     embed = discord.Embed(title="🗑️ Message Intercepted", description=f"**Content:**\n> {data['content']}", color=0x2b2d31)
     embed.set_author(name=f"{data['author'].display_name} • Ghost Data", icon_url=data['author'].display_avatar.url)
-    embed.add_field(name="⏰ Time Removed", value=f"`{time_string}`", inline=True)
-    embed.add_field(name="👤 Target", value=data['author'].mention, inline=True)
+    embed.add_field(name="Time Removed", value=f"`{time_string}`", inline=True)
+    embed.add_field(name="Target", value=data['author'].mention, inline=True)
     if data["image"]:
         embed.set_image(url=data["image"])
-    embed.set_footer(text="Elite Master Snipe v4.0 • 2026 System", icon_url=bot.user.display_avatar.url)
+    embed.set_footer(text="Elite Master Snipe v4.0 • 2026", icon_url=bot.user.display_avatar.url)
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="editsnipe", description="⚡ Elite Snapshot: Reveal an edited message")
+@bot.tree.command(name="editsnipe", description=" Edit Snipe: Reveal an edited message")
 async def editsnipe(interaction: discord.Interaction):
     data = bot.edit_snipes.get(interaction.channel_id)
     if not data:
-        return await interaction.response.send_message("✨ *No edited truths found here.*", ephemeral=True)
+        return await interaction.response.send_message(" *No edited truths found here.*", ephemeral=True)
     time_string = data["time"].strftime("%I:%M:%S %p")
     embed = discord.Embed(title="📝 Message Altered", color=0x2b2d31)
     embed.set_author(name=f"{data['author'].display_name} • Edit History", icon_url=data['author'].display_avatar.url)
-    embed.add_field(name="🚫 Original Text", value=f"> {data['old_content']}", inline=False)
-    embed.add_field(name="✅ New Text", value=f"> {data['new_content']}", inline=False)
-    embed.add_field(name="⏰ Edited At", value=f"``{time_string}``", inline=True)
-    embed.add_field(name="👤 User", value=data['author'].mention, inline=True)
+    embed.add_field(name="Original Text", value=f"> {data['old_content']}", inline=False)
+    embed.add_field(name="New Text", value=f"> {data['new_content']}", inline=False)
+    embed.add_field(name="Edited At", value=f"``{time_string}``", inline=True)
+    embed.add_field(name="User", value=data['author'].mention, inline=True)
     embed.set_footer(text="Elite Master Snipe • 2026 Detection", icon_url=bot.user.display_avatar.url)
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="rsnipe", description="🎭 Elite Snapshot: Removed Reaction")
+@bot.tree.command(name="rsnipe", description="Reaction Snipe: Removed Reaction")
 async def rsnipe(interaction: discord.Interaction):
     data = bot.reaction_snipes.get(interaction.channel_id)
     if not data:
-        return await interaction.response.send_message("✨ *No reactions have faded yet...*", ephemeral=True)
+        return await interaction.response.send_message("*No reactions have faded yet...*", ephemeral=True)
     time_string = data["time"].strftime("%I:%M:%S %p")
-    embed = discord.Embed(title="🎭 Reaction Captured", description=f"The reaction {data['emoji']} was removed.", color=0xffcc00)
+    embed = discord.Embed(title="Reaction Captured", description=f"The reaction {data['emoji']} was removed.", color=0xffcc00)
     if data['user']:
         embed.set_author(name=data['user'].display_name, icon_url=data['user'].display_avatar.url)
-    embed.add_field(name="⏰ Captured At", value=f"`{time_string}`", inline=True)
+    embed.add_field(name="Captured At", value=f"`{time_string}`", inline=True)
     embed.set_footer(text="Elite Reaction Analytics")
     await interaction.response.send_message(embed=embed)
 
