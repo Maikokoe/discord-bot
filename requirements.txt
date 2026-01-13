@@ -1,7 +1,7 @@
-py-cord==2.5.0
-Pillow
-aiohttp
-dotenv
 flask
 flask-cors
 psycopg2-binary
+aiohttp>=3.11.18
+discord.py>=2.0.0
+requests
+sqlalchemy
