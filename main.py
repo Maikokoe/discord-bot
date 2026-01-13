@@ -102,7 +102,7 @@ async def generate_response(user_id, guild_id, user_name, content, image_urls=No
         # Call Gemini (Free)
         # We run this in a thread to keep the bot responsive
         response = await asyncio.to_thread(
-            model.generate_content, 
+            client.models.generate_content, 
             prompt_parts
         )
         
